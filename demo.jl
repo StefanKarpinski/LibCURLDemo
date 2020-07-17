@@ -49,13 +49,13 @@ function write_callback(
     ptr   :: Ptr{Cchar},
     size  :: Csize_t,
     count :: Csize_t,
-    data  :: Ptr{Cvoid},
+    userp :: Ptr{Cvoid},
 )::Csize_t
     n = size*count
     buffer = Array{UInt8}(undef, n)
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64), buffer, ptr, n)
-    io = unsafe_load(convert(Ptr{Any}, data))::IO
-    write(io, data)
+    io = unsafe_load(convert(Ptr{Any}, userp))::IO
+    write(io, buffer)
 end
 
 function socket_callback(
