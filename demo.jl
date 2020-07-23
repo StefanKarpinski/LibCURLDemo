@@ -196,6 +196,6 @@ const curl = curl_multi_init()
 @check curl_multi_setopt(curl, CURLMOPT_TIMERFUNCTION, timer_cb)
 @check curl_multi_setopt(curl, CURLMOPT_SOCKETFUNCTION, socket_cb)
 
-add_download("http://127.0.0.1:8000", stdout)
-
 ## actually use it ##
+
+add_download("http://127.0.0.1:8000", stdout)
