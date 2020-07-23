@@ -1,10 +1,17 @@
 using LibCURL
 
-function printsig(fname::AbstractString, args...)
-    print(fname)
-    show(args)
-    println()
-    flush(stdout)
+function printsig(fname::String, args...)
+    ccall(:puts, Cint, (Ptr{Cchar},), fname * repr(args))
+end
+
+macro check(ex::Expr)
+    ex.head == :call || error("@check: not a call: $ex")
+    name = ex.args[1 + (ex.args[1] == :ccall)]
+    quote
+        r = $(esc(ex))
+        iszero(r) || error($name * ": " * string(r))
+        nothing
+    end
 end
 
 # some libuv wrappers
@@ -20,29 +27,38 @@ uv_poll_free(p::Ptr{Cvoid}) =
 
 # TODO: was uv_poll_init_socket in example, but our libuv doesn't have that
 function uv_poll_init(p::Ptr{Cvoid}, sock::curl_socket_t)
-    ccall(:uv_poll_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, curl_socket_t),
-          Base.eventloop(), p, sock)
+    @check ccall(:uv_poll_init, Cint,
+        (Ptr{Cvoid}, Ptr{Cvoid}, curl_socket_t), Base.eventloop(), p, sock)
     # NOTE: if assertion fails need to store indirectly
     @assert sizeof(curl_socket_t) <= sizeof(Ptr{Cvoid})
     unsafe_store!(convert(Ptr{curl_socket_t}, p), sock)
+    return nothing
 end
 
-uv_poll_start(p::Ptr{Cvoid}, events::Integer, cb::Ptr{Cvoid}) =
-    ccall(:uv_poll_start, Cint, (Ptr{Cvoid}, Cint, Ptr{Cvoid}), p, events, cb)
+function uv_poll_start(p::Ptr{Cvoid}, events::Integer, cb::Ptr{Cvoid})
+    @check ccall(:uv_poll_start, Cint, (Ptr{Cvoid}, Cint, Ptr{Cvoid}), p, events, cb)
+end
 
-uv_poll_stop(p::Ptr{Cvoid}) =
-    ccall(:uv_poll_start, Cint, (Ptr{Cvoid},), p)
+function uv_poll_stop(p::Ptr{Cvoid})
+    @check ccall(:uv_poll_start, Cint, (Ptr{Cvoid},), p)
+end
 
-uv_close(p::Ptr{Cvoid}, cb::Ptr{Cvoid}) =
-    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), p, cb)
+function uv_close(p::Ptr{Cvoid}, cb::Ptr{Cvoid})
+    @check ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), p, cb)
+end
 
-uv_timer_init(p::Ptr{Cvoid}) =
-    ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), Base.eventloop(), p)
+function uv_timer_init(p::Ptr{Cvoid})
+    @check ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), Base.eventloop(), p)
+end
 
-uv_timer_start(p::Ptr{Cvoid}, cb::Ptr{Cvoid}, t::Integer, r::Integer) =
-    ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64), p, cb, t, r)
+function uv_timer_start(p::Ptr{Cvoid}, cb::Ptr{Cvoid}, t::Integer, r::Integer)
+    @check ccall(:uv_timer_start, Cint,
+        (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64), p, cb, t, r)
+end
 
-uv_timer_stop(p::Ptr{Cvoid}) = ccall(:uv_timer_stop, Cint, (Ptr{Cvoid},), p)
+function uv_timer_stop(p::Ptr{Cvoid})
+    @check ccall(:uv_timer_stop, Cint, (Ptr{Cvoid},), p)
+end
 
 # additional libcurl methods
 
@@ -79,21 +95,22 @@ function socket_callback(
         if uv_poll_p == C_NULL
             uv_poll_p = uv_poll_alloc()
             uv_poll_init(uv_poll_p, sock)
-            curl_multi_assign(curl, sock, uv_poll_p)
+            @check curl_multi_assign(curl, sock, uv_poll_p)
         end
         events = 0
-        action == CURL_POLL_IN  || (events |= UV_WRITABLE)
-        action == CURL_POLL_OUT || (events |= UV_READABLE)
+        action != CURL_POLL_IN  && (events |= UV_WRITABLE)
+        action != CURL_POLL_OUT && (events |= UV_READABLE)
         uv_poll_start(uv_poll_p, events, event_cb)
     elseif action == CURL_POLL_REMOVE
         if uv_poll_p != C_NULL
             uv_poll_stop(uv_poll_p)
             uv_close(uv_poll_p, uv_poll_free)
-            curl_multi_assign(curl, sock, C_NULL)
+            @check curl_multi_assign(curl, sock, C_NULL)
         end
     else
         error("socket_callback: unexpected action — $action")
     end
+    return 0
 end
 
 function timer_callback(
@@ -129,13 +146,13 @@ function event_callback(
     events & UV_READABLE != 0 && (flags |= CURL_CSELECT_IN)
     events & UV_WRITABLE != 0 && (flags |= CURL_CSELECT_OUT)
     sock = unsafe_load(convert(Ptr{curl_socket_t}, uv_poll_p))
-    curl_multi_socket_action(curl, sock, flags)
+    @check curl_multi_socket_action(curl, sock, flags)
     # check_multi_info()
 end
 
 function timeout_callback(p::Ptr{Cvoid})::Cvoid
     printsig("timeout_callback", p)
-    curl_multi_socket_action(curl, CURL_SOCKET_TIMEOUT, 0)
+    @check curl_multi_socket_action(curl, CURL_SOCKET_TIMEOUT, 0)
     # check_multi_info()
 end
 
@@ -149,29 +166,19 @@ function add_download(url::AbstractString, io::IO)
     handle = curl_easy_init()
 
     # set the URL and request to follow redirects
-    curl_easy_setopt(handle, CURLOPT_URL, url)
-    curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1)
+    @check curl_easy_setopt(handle, CURLOPT_URL, url)
+    @check curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1)
 
     # associate IO object with handle
-    curl_easy_setopt(handle, CURLOPT_PRIVATE, io)
-    curl_easy_setopt(handle, CURLOPT_WRITEDATA, io)
-    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_cb)
+    @check curl_easy_setopt(handle, CURLOPT_PRIVATE, io)
+    @check curl_easy_setopt(handle, CURLOPT_WRITEDATA, io)
+    @check curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_cb)
 
     # add curl handle to be multiplexed
-    curl_multi_add_handle(curl, handle)
+    @check curl_multi_add_handle(curl, handle)
 
     return handle
 end
-
-## curl setup ##
-
-curl_global_init(CURL_GLOBAL_ALL)
-
-const curl = curl_multi_init()
-
-# set various callbacks
-curl_multi_setopt(curl, CURLMOPT_TIMERFUNCTION, timer_cb)
-curl_multi_setopt(curl, CURLMOPT_SOCKETFUNCTION, socket_cb)
 
 ## libuv setup ##
 
@@ -179,6 +186,16 @@ const timer = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), Base._sizeof_uv_timer)
 
 uv_timer_init(timer)
 
-## actually use it ##
+## curl setup ##
 
-add_download("https://example.com", stdout)
+@check curl_global_init(CURL_GLOBAL_ALL)
+
+const curl = curl_multi_init()
+
+# set various callbacks
+@check curl_multi_setopt(curl, CURLMOPT_TIMERFUNCTION, timer_cb)
+@check curl_multi_setopt(curl, CURLMOPT_SOCKETFUNCTION, socket_cb)
+
+add_download("http://127.0.0.1:8000", stdout)
+
+## actually use it ##
