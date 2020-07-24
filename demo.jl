@@ -7,9 +7,10 @@ end
 macro check(ex::Expr)
     ex.head == :call || error("@check: not a call: $ex")
     name = ex.args[1 + (ex.args[1] == :ccall)]
+    prefix = "$name: "
     quote
         r = $(esc(ex))
-        iszero(r) || error($name * ": " * string(r))
+        iszero(r) || error($prefix * string(r))
         nothing
     end
 end
@@ -21,9 +22,6 @@ const UV_WRITABLE = 2
 
 uv_poll_alloc() =
     ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), Base._sizeof_uv_poll)
-
-uv_poll_free(p::Ptr{Cvoid}) =
-    ccall(:jl_free, Cvoid, (Ptr{Cvoid},), p)
 
 # TODO: was uv_poll_init_socket in example, but our libuv doesn't have that
 function uv_poll_init(p::Ptr{Cvoid}, sock::curl_socket_t)
@@ -40,11 +38,11 @@ function uv_poll_start(p::Ptr{Cvoid}, events::Integer, cb::Ptr{Cvoid})
 end
 
 function uv_poll_stop(p::Ptr{Cvoid})
-    @check ccall(:uv_poll_start, Cint, (Ptr{Cvoid},), p)
+    @check ccall(:uv_poll_stop, Cint, (Ptr{Cvoid},), p)
 end
 
 function uv_close(p::Ptr{Cvoid}, cb::Ptr{Cvoid})
-    @check ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), p, cb)
+    ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), p, cb)
 end
 
 function uv_timer_init(p::Ptr{Cvoid})
@@ -104,7 +102,7 @@ function socket_callback(
     elseif action == CURL_POLL_REMOVE
         if uv_poll_p != C_NULL
             uv_poll_stop(uv_poll_p)
-            uv_close(uv_poll_p, uv_poll_free)
+            uv_close(uv_poll_p, cglobal(:jl_free))
             @check curl_multi_assign(curl, sock, C_NULL)
         end
     else
