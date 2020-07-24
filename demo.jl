@@ -5,9 +5,16 @@ function printsig(fname::String, args...)
 end
 
 macro check(ex::Expr)
-    ex.head == :call || error("@check: not a call: $ex")
-    name = ex.args[1 + (ex.args[1] == :ccall)]
-    prefix = "$name: "
+    ex.head == :call ||
+        error("@check: not a call: $ex")
+    if ex.args[1] == :ccall
+        ex.args[2] isa QuoteNode ||
+            error("@check: ccallee must be a symbol")
+        f = ex.args[2].value :: Symbol
+    else
+        f = ex.args[1] :: Symbol
+    end
+    prefix = "$f: "
     quote
         r = $(esc(ex))
         iszero(r) || error($prefix * string(r))
