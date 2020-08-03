@@ -157,11 +157,11 @@ function check_multi_info()
             handle = message.handle
             url_ref = Ref{Ptr{Cchar}}()
             @check curl_easy_getinfo(easy_handle, CURLINFO_EFFECTIVE_URL, url_ref)
-            println("DONE: ", unsafe_string(url_ref[]))
+            # println("DONE: ", unsafe_string(url_ref[]))
             curl_multi_remove_handle(curl, handle)
             curl_easy_cleanup(handle)
         else
-            @info warn "CURLMSG default"
+            # @info warn "CURLMSG default"
         end
     end
 end
