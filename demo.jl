@@ -1,7 +1,7 @@
 using LibCURL
 
 function printsig(fname::String, args...)
-    ccall(:puts, Cint, (Ptr{Cchar},), fname * repr(args))
+    # ccall(:puts, Cint, (Ptr{Cchar},), fname * repr(args))
 end
 
 macro check(ex::Expr)
@@ -69,8 +69,9 @@ end
 
 import LibCURL: curl_multi_socket_action
 
-curl_multi_socket_action(multi_handle, s, ev_bitmask) =
+function curl_multi_socket_action(multi_handle, s, ev_bitmask)
     curl_multi_socket_action(multi_handle, s, ev_bitmask, Ref{Cint}())
+end
 
 # curl callbacks
 
@@ -141,6 +142,30 @@ const timer_cb = @cfunction(timer_callback,
 
 # libuv callbacks
 
+struct CURLMsg
+   msg    :: CURLMSG
+   handle :: Ptr{Cvoid}
+   code   :: CURLcode
+end
+
+function check_multi_info()
+    while true
+        p = curl_multi_info_read(curl, Ref{Cint}())
+        p == C_NULL && return
+        message = unsafe_load(convert(Ptr{CURLMSG}, p))
+        if message.msg == CURLMSG_DONE
+            handle = message.handle
+            url_ref = Ref{Ptr{Cchar}}()
+            @check curl_easy_getinfo(easy_handle, CURLINFO_EFFECTIVE_URL, url_ref)
+            println("DONE: ", unsafe_string(url_ref[]))
+            curl_multi_remove_handle(curl, handle)
+            curl_easy_cleanup(handle)
+        else
+            @info warn "CURLMSG default"
+        end
+    end
+end
+
 function event_callback(
     uv_poll_p :: Ptr{Cvoid},
     status    :: Cint,
@@ -152,13 +177,13 @@ function event_callback(
     events & UV_WRITABLE != 0 && (flags |= CURL_CSELECT_OUT)
     sock = unsafe_load(convert(Ptr{curl_socket_t}, uv_poll_p))
     @check curl_multi_socket_action(curl, sock, flags)
-    # check_multi_info()
+    check_multi_info()
 end
 
 function timeout_callback(p::Ptr{Cvoid})::Cvoid
     printsig("timeout_callback", p)
     @check curl_multi_socket_action(curl, CURL_SOCKET_TIMEOUT, 0)
-    # check_multi_info()
+    check_multi_info()
 end
 
 const event_cb = @cfunction(event_callback, Cvoid, (Ptr{Cvoid}, Cint, Cint))
