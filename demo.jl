@@ -84,7 +84,7 @@ function write_callback(
     printsig("write_callback", ptr, size, count, userp)
     n = size*count
     buffer = Array{UInt8}(undef, n)
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64), buffer, ptr, n)
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, ptr, n)
     io = unsafe_load(convert(Ptr{Any}, userp))::IO
     write(io, buffer)
 end
@@ -134,7 +134,7 @@ function timer_callback(
 end
 
 const write_cb = @cfunction(write_callback,
-    Csize_t, (Ptr{Cvoid}, Csize_t, Csize_t, Ptr{Cvoid}))
+    Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
 const socket_cb = @cfunction(socket_callback,
     Cint, (Ptr{Cvoid}, curl_socket_t, Cint, Ptr{Cvoid}, Ptr{Cvoid}))
 const timer_cb = @cfunction(timer_callback,
