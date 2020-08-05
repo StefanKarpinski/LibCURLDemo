@@ -15,7 +15,7 @@ macro check(ex::Expr)
     prefix = "$f: "
     quote
         r = $(esc(ex))
-        iszero(r) || error($prefix * string(r))
+        iszero(r) || @async @error($prefix * string(r))
         nothing
     end
 end
@@ -79,11 +79,11 @@ function write_callback(
     userp :: Ptr{Cvoid},
 )::Csize_t
     n = size * count
-    ccall(:write, Csize_t, (Cint, Ptr{Cvoid}, Csize_t), 1, ptr, n)
-    # buffer = Array{UInt8}(undef, n)
-    # ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, ptr, n)
+    # ccall(:write, Csize_t, (Cint, Ptr{Cvoid}, Csize_t), 1, ptr, n)
+    buffer = Array{UInt8}(undef, n)
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, ptr, n)
     # io = unsafe_load(convert(Ptr{Any}, userp))::IO
-    # write(io, buffer)
+    @async write(stdout, buffer)
 end
 
 function socket_callback(
@@ -110,7 +110,7 @@ function socket_callback(
             @check curl_multi_assign(curl, sock, C_NULL)
         end
     else
-        error("socket_callback: unexpected action — $action")
+        @async @error("socket_callback: unexpected action", action)
     end
     return 0
 end
@@ -152,11 +152,11 @@ function check_multi_info()
             handle = message.handle
             url_ref = Ref{Ptr{Cchar}}()
             @check curl_easy_getinfo(handle, CURLINFO_EFFECTIVE_URL, url_ref)
-            puts("DONE: " * unsafe_string(url_ref[]))
+            @async @info("download done", url = unsafe_string(url_ref[]))
             @check curl_multi_remove_handle(curl, handle)
             curl_easy_cleanup(handle)
         else
-            puts("CURLMSG default")
+            @async @info("curl message handler default")
         end
     end
 end
