@@ -1,8 +1,7 @@
 using LibCURL
 
-function printsig(fname::String, args...)
-    # ccall(:puts, Cint, (Ptr{Cchar},), fname * repr(args))
-end
+puts(s::Union{String,SubString{String}}) = ccall(:puts, Cint, (Ptr{Cchar},), s)
+printsig(fname::String, args...) = puts(fname * repr(args))
 
 macro check(ex::Expr)
     ex.head == :call ||
@@ -83,10 +82,11 @@ function write_callback(
 )::Csize_t
     printsig("write_callback", ptr, size, count, userp)
     n = size*count
-    buffer = Array{UInt8}(undef, n)
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, ptr, n)
-    io = unsafe_load(convert(Ptr{Any}, userp))::IO
-    write(io, buffer)
+    ccall(:write, Csize_t, (Cint, Ptr{Cvoid}, Csize_t), 1, ptr, n)
+    # buffer = Array{UInt8}(undef, n)
+    # ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, ptr, n)
+    # io = unsafe_load(convert(Ptr{Any}, userp))::IO
+    # write(io, buffer)
 end
 
 function socket_callback(
@@ -152,16 +152,16 @@ function check_multi_info()
     while true
         p = curl_multi_info_read(curl, Ref{Cint}())
         p == C_NULL && return
-        message = unsafe_load(convert(Ptr{CURLMSG}, p))
+        message = unsafe_load(convert(Ptr{CURLMsg}, p))
         if message.msg == CURLMSG_DONE
             handle = message.handle
             url_ref = Ref{Ptr{Cchar}}()
-            @check curl_easy_getinfo(easy_handle, CURLINFO_EFFECTIVE_URL, url_ref)
-            # println("DONE: ", unsafe_string(url_ref[]))
-            curl_multi_remove_handle(curl, handle)
+            @check curl_easy_getinfo(handle, CURLINFO_EFFECTIVE_URL, url_ref)
+            puts("DONE: " * unsafe_string(url_ref[]))
+            @check curl_multi_remove_handle(curl, handle)
             curl_easy_cleanup(handle)
         else
-            # @info warn "CURLMSG default"
+            puts("CURLMSG default")
         end
     end
 end
