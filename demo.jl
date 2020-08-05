@@ -1,7 +1,6 @@
 using LibCURL
 
 puts(s::Union{String,SubString{String}}) = ccall(:puts, Cint, (Ptr{Cchar},), s)
-printsig(fname::String, args...) = puts(fname * repr(args))
 
 macro check(ex::Expr)
     ex.head == :call ||
@@ -26,8 +25,7 @@ end
 const UV_READABLE = 1
 const UV_WRITABLE = 2
 
-uv_poll_alloc() =
-    ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), Base._sizeof_uv_poll)
+uv_poll_alloc() = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), Base._sizeof_uv_poll)
 
 # TODO: was uv_poll_init_socket in example, but our libuv doesn't have that
 function uv_poll_init(p::Ptr{Cvoid}, sock::curl_socket_t)
@@ -80,8 +78,7 @@ function write_callback(
     count :: Csize_t,
     userp :: Ptr{Cvoid},
 )::Csize_t
-    printsig("write_callback", ptr, size, count, userp)
-    n = size*count
+    n = size * count
     ccall(:write, Csize_t, (Cint, Ptr{Cvoid}, Csize_t), 1, ptr, n)
     # buffer = Array{UInt8}(undef, n)
     # ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, ptr, n)
@@ -96,7 +93,6 @@ function socket_callback(
     userp     :: Ptr{Cvoid},
     uv_poll_p :: Ptr{Cvoid},
 )::Cint
-    printsig("socket_callback", handle, sock, action, userp, uv_poll_p)
     if action in (CURL_POLL_IN, CURL_POLL_OUT, CURL_POLL_INOUT)
         if uv_poll_p == C_NULL
             uv_poll_p = uv_poll_alloc()
@@ -124,7 +120,6 @@ function timer_callback(
     timeout_ms :: Clong,
     userp      :: Ptr{Cvoid},
 )::Cint
-    printsig("timer_callback", multi, timeout_ms, userp)
     if timeout_ms ≥ 0
         uv_timer_start(timer, timeout_cb, max(1, timeout_ms), 0)
     else
@@ -171,7 +166,6 @@ function event_callback(
     status    :: Cint,
     events    :: Cint,
 )::Cvoid
-    printsig("event_callback", uv_poll_p, status, events)
     flags = 0
     events & UV_READABLE != 0 && (flags |= CURL_CSELECT_IN)
     events & UV_WRITABLE != 0 && (flags |= CURL_CSELECT_OUT)
@@ -181,7 +175,6 @@ function event_callback(
 end
 
 function timeout_callback(p::Ptr{Cvoid})::Cvoid
-    printsig("timeout_callback", p)
     @check curl_multi_socket_action(curl, CURL_SOCKET_TIMEOUT, 0)
     check_multi_info()
 end
@@ -197,7 +190,7 @@ function add_download(url::AbstractString, io::IO)
 
     # set the URL and request to follow redirects
     @check curl_easy_setopt(handle, CURLOPT_URL, url)
-    @check curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1)
+    @check curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, true)
 
     # associate IO object with handle
     @check curl_easy_setopt(handle, CURLOPT_PRIVATE, io)
