@@ -159,7 +159,7 @@ function check_multi_info()
             @check curl_multi_remove_handle(curl, handle)
             curl_easy_cleanup(handle)
         else
-            @async @info("curl message handler default")
+            @async @info("unknown CURL message type", msg = message.msg)
         end
     end
 end
@@ -232,12 +232,15 @@ const curl = curl_multi_init()
 
 ## actually use it ##
 
-io = IOBuffer()
-add_download("https://pkg.julialang.org/registries", io)
+io1 = IOBuffer()
+io2 = IOBuffer()
+add_download("https://pkg.julialang.org/registries", io1)
+add_download("https://pkg.julialang.org/registry/23338594-aafe-5451-b93e-139f81909106/35fb75d4e6db1100c206a54522092f9c836b21c0", io2)
 sleep(1)
-write(stdout, take!(io))
+println("length 1: ", length(take!(io1)))
+println("length 2: ", length(take!(io2)))
 
 ## cleanup ##
 
-curl_multi_cleanup(curl)
 uv_close(timer, cglobal(:jl_free))
+curl_multi_cleanup(curl)
