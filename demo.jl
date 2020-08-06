@@ -84,6 +84,7 @@ function write_callback(
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, ptr, n)
     # io = unsafe_load(convert(Ptr{Any}, userp))::IO
     @async write(stdout, buffer)
+    return n
 end
 
 function socket_callback(
@@ -221,4 +222,4 @@ const curl = curl_multi_init()
 
 ## actually use it ##
 
-add_download("http://127.0.0.1:8000", stdout)
+add_download("http://karpinski.org", stdout)
