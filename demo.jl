@@ -82,8 +82,8 @@ function write_callback(
     # ccall(:write, Csize_t, (Cint, Ptr{Cvoid}, Csize_t), 1, ptr, n)
     buffer = Array{UInt8}(undef, n)
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, ptr, n)
-    # io = unsafe_load(convert(Ptr{Any}, userp))::IO
-    @async write(stdout, buffer)
+    io = unsafe_pointer_to_objref(userp)::IO
+    @async write(io, buffer)
     return n
 end
 
@@ -194,8 +194,9 @@ function add_download(url::AbstractString, io::IO)
     @check curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, true)
 
     # associate IO object with handle
-    @check curl_easy_setopt(handle, CURLOPT_PRIVATE, io)
-    @check curl_easy_setopt(handle, CURLOPT_WRITEDATA, io)
+    # TODO: may need to root `io` to keep it alive
+    p = pointer_from_objref(io)
+    @check curl_easy_setopt(handle, CURLOPT_WRITEDATA, p)
     @check curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_cb)
 
     # add curl handle to be multiplexed
@@ -222,4 +223,5 @@ const curl = curl_multi_init()
 
 ## actually use it ##
 
-add_download("http://karpinski.org", stdout)
+io = IOBuffer()
+add_download("http://karpinski.org", io)
