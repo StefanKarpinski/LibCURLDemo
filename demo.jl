@@ -153,7 +153,8 @@ function check_multi_info()
             handle = message.handle
             url_ref = Ref{Ptr{Cchar}}()
             @check curl_easy_getinfo(handle, CURLINFO_EFFECTIVE_URL, url_ref)
-            @async @info("download done", url = unsafe_string(url_ref[]))
+            url = unsafe_string(url_ref[])
+            @async @info("download done", url)
             @check curl_multi_remove_handle(curl, handle)
             curl_easy_cleanup(handle)
         else
@@ -225,3 +226,10 @@ const curl = curl_multi_init()
 
 io = IOBuffer()
 add_download("http://karpinski.org", io)
+sleep(1)
+write(stdout, take!(io))
+
+## cleanup ##
+
+curl_multi_cleanup(curl)
+uv_close(timer, cglobal(:jl_free))
