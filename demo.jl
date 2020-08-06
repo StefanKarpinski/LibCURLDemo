@@ -191,7 +191,10 @@ function add_download(url::AbstractString, io::IO)
     # init a single curl handle
     handle = curl_easy_init()
 
-    # tell curl where to find certs
+    # HTTP options
+    @check curl_easy_setopt(curl, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
+
+    # HTTPS: tell curl where to find certs
     certs_file = joinpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
     @check curl_easy_setopt(handle, CURLOPT_CAINFO, certs_file)
 
@@ -230,7 +233,7 @@ const curl = curl_multi_init()
 ## actually use it ##
 
 io = IOBuffer()
-add_download("https://karpinski.org", io)
+add_download("https://pkg.julialang.org/registries", io)
 sleep(1)
 write(stdout, take!(io))
 
