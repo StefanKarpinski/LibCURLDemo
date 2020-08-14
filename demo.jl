@@ -27,14 +27,9 @@ const UV_WRITABLE = 2
 
 uv_poll_alloc() = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), Base._sizeof_uv_poll)
 
-# TODO: was uv_poll_init_socket in example, but our libuv doesn't have that
 function uv_poll_init(p::Ptr{Cvoid}, sock::curl_socket_t)
     @check ccall(:uv_poll_init, Cint,
         (Ptr{Cvoid}, Ptr{Cvoid}, curl_socket_t), Base.eventloop(), p, sock)
-    # NOTE: if assertion fails need to store indirectly
-    @assert sizeof(curl_socket_t) <= sizeof(Ptr{Cvoid})
-    unsafe_store!(convert(Ptr{curl_socket_t}, p), sock)
-    return nothing
 end
 
 function uv_poll_start(p::Ptr{Cvoid}, events::Integer, cb::Ptr{Cvoid})
@@ -98,6 +93,9 @@ function socket_callback(
         if uv_poll_p == C_NULL
             uv_poll_p = uv_poll_alloc()
             uv_poll_init(uv_poll_p, sock)
+            # NOTE: if assertion fails need to store indirectly
+            @assert sizeof(curl_socket_t) <= sizeof(Ptr{Cvoid})
+            unsafe_store!(convert(Ptr{curl_socket_t}, uv_poll_p), sock)
             @check curl_multi_assign(curl, sock, uv_poll_p)
         end
         events = 0
